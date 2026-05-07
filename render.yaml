@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: smartdtc-backend
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5000"
+      - key: MONGO_URI
+        sync: false          # set manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+      - key: REFRESH_EXPIRES_IN
+        value: 7d
+      - key: AI_SERVICE_URL
+        value: https://ai-service-4hzt.onrender.com
+      - key: PYTHON_AI_URL
+        value: https://ai-service-4hzt.onrender.com
+      - key: CLIENT_URL
+        value: "*"           # update to your frontend URL once deployed
+    healthCheckPath: /health
