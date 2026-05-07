@@ -10,7 +10,8 @@ router.get('/stats', authorize('admin', 'dispatcher'), ctrl.getBusStats);
 router.get('/',      authorize('admin', 'dispatcher'), ctrl.getAllBuses);
 router.get('/:id',   authorize('admin', 'dispatcher'), ctrl.getBus);
 router.post('/',     authorize('admin'),               ctrl.createBus);
-router.patch('/:id/status', authorize('admin', 'dispatcher'), ctrl.updateBusStatus);
+router.patch('/:id/status',      authorize('admin', 'dispatcher'), ctrl.updateBusStatus);
+router.patch('/:id/generate-qr', authorize('admin'),               ctrl.generateQr);
 router.put('/:id',   authorize('admin', 'dispatcher'), ctrl.updateBus);
 router.delete('/:id',authorize('admin'),               ctrl.deleteBus);
 

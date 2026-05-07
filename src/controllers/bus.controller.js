@@ -48,8 +48,10 @@ exports.createBus = async (req, res) => {
 // PUT /api/v1/buses/:id  (admin/dispatcher)
 exports.updateBus = async (req, res) => {
   try {
-    const bus = await Bus.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const bus = await Bus.findById(req.params.id);
     if (!bus) return res.status(404).json({ success: false, message: 'Bus not found.' });
+    Object.assign(bus, req.body);
+    await bus.save(); // triggers pre('save') → auto-generates busQrId if missing
     res.json({ success: true, bus });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -62,6 +64,21 @@ exports.deleteBus = async (req, res) => {
     const bus = await Bus.findByIdAndDelete(req.params.id);
     if (!bus) return res.status(404).json({ success: false, message: 'Bus not found.' });
     res.json({ success: true, message: 'Bus deleted.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// PATCH /api/v1/buses/:id/generate-qr  (admin) — backfill QR for buses that never got one
+exports.generateQr = async (req, res) => {
+  try {
+    const bus = await Bus.findById(req.params.id);
+    if (!bus) return res.status(404).json({ success: false, message: 'Bus not found.' });
+    if (!bus.busQrId) {
+      // pre('save') hook will generate the QR token
+      await bus.save();
+    }
+    res.json({ success: true, bus });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
