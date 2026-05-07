@@ -1,6 +1,7 @@
 const Schedule = require('../models/Schedule');
 const Bus      = require('../models/Bus');
 const Driver   = require('../models/Driver');
+const Route    = require('../models/Route');
 const axios    = require('axios');
 
 const AI_URL = process.env.PYTHON_AI_URL || 'http://localhost:8000';
@@ -104,40 +105,70 @@ exports.generateAISchedule = async (req, res) => {
       weather         = 'clear',
       start_hour      = 5,
       end_hour        = 23,
+      turnaround_min  = 15,
+      // trip_duration_min can be provided explicitly, otherwise computed from route distance
+      trip_duration_min: explicitDuration,
     } = req.body;
     if (!date) return res.status(400).json({ success: false, message: 'date is required.' });
     if (!routeIds.length) return res.status(400).json({ success: false, message: 'routeIds[] is required.' });
 
     const busesPerRoute = Math.max(1, Math.floor(totalBusesAvailable / routeIds.length));
 
+    // Fetch route details to compute trip duration if not supplied
+    // avg city bus speed ~18 km/h, add stop dwell time buffer
+    const routeMap = {};
+    if (!explicitDuration && routeIds.length > 0) {
+      const routes = await Route.find({ _id: { $in: routeIds } }).select('_id distance_km total_stages').lean();
+      for (const r of routes) {
+        const distKm = r.distance_km || 15;
+        const stopDwell = (r.total_stages || 10) * 0.5; // ~30s dwell per stop in minutes
+        routeMap[String(r._id)] = Math.round(distKm / 18 * 60 + stopDwell);
+      }
+    }
+
     // Call AI service for each route in parallel
     const results = await Promise.allSettled(
-      routeIds.map(routeId =>
-        axios.post(`${AI_URL}/optimize/headway`, {
-          route_id:   routeId,
+      routeIds.map(routeId => {
+        const tripDuration = explicitDuration || routeMap[String(routeId)] || 90;
+        return axios.post(`${AI_URL}/optimize/headway`, {
+          route_id:          routeId,
           date,
-          fleet_size: busesPerRoute,
+          fleet_size:        busesPerRoute,
+          trip_duration_min: tripDuration,
+          turnaround_min,
           is_weekend,
           is_holiday,
           start_hour,
           end_hour,
-        })
-      )
+        });
+      })
     );
 
     const routeResults = results.map((r, i) => ({
-      routeId:   routeIds[i],
-      success:   r.status === 'fulfilled',
-      slots:     r.status === 'fulfilled' ? (r.value.data.slots ?? [])     : [],
-      waitScore: r.status === 'fulfilled' ? r.value.data.total_wait_score : null,
-      error:     r.status === 'rejected'  ? r.reason.message : null,
+      routeId:          routeIds[i],
+      success:          r.status === 'fulfilled',
+      slots:            r.status === 'fulfilled' ? (r.value.data.slots ?? [])            : [],
+      waitScore:        r.status === 'fulfilled' ? r.value.data.total_wait_score        : null,
+      total_trips:      r.status === 'fulfilled' ? r.value.data.total_trips             : null,
+      cycle_time_min:   r.status === 'fulfilled' ? r.value.data.cycle_time_min          : null,
+      min_headway_min:  r.status === 'fulfilled' ? r.value.data.min_headway_min         : null,
+      trips_per_bus:    r.status === 'fulfilled' ? r.value.data.trips_per_bus           : null,
+      trip_duration_min:r.status === 'fulfilled' ? r.value.data.trip_duration_min       : null,
+      error:            r.status === 'rejected'  ? r.reason.message                     : null,
     }));
 
-    // For single-route request: expose top-level slots so the frontend can read data.slots directly
-    const singleRoute   = routeIds.length === 1;
-    const topLevelSlots = singleRoute ? routeResults[0].slots : [];
+    // For single-route request: expose top-level fields so frontend can read data.slots etc directly
+    const singleRoute = routeIds.length === 1;
+    const topLevel    = singleRoute ? {
+      slots:             routeResults[0].slots,
+      total_trips:       routeResults[0].total_trips,
+      cycle_time_min:    routeResults[0].cycle_time_min,
+      min_headway_min:   routeResults[0].min_headway_min,
+      trips_per_bus:     routeResults[0].trips_per_bus,
+      trip_duration_min: routeResults[0].trip_duration_min,
+    } : { slots: [] };
 
-    res.json({ success: true, date, schedules: routeResults, slots: topLevelSlots });
+    res.json({ success: true, date, schedules: routeResults, ...topLevel });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
