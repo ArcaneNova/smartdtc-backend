@@ -646,18 +646,14 @@ router.get('/driver/performance', authorize('driver'), async (req, res) => {
 // POST /api/v1/mobile/ai/eta  — proxy to AI service for mobile app
 router.post('/ai/eta', async (req, res) => {
   try {
-    const { data } = await axios.post(`${AI_URL}/predict/eta`, req.body, { timeout: 8000 });
+    const { data } = await axios.post(`${AI_URL}/predict/eta`, req.body, { timeout: 10000 });
     res.json({ success: true, ...data });
   } catch (err) {
-    // Fallback: simple haversine-based ETA
-    const dist = req.body.distance_km || 5;
-    const speed = req.body.avg_speed_kmh || 20;
-    res.json({
-      success:        true,
-      eta_minutes:    Math.round((dist / speed) * 60),
-      eta_confidence: 0.7,
-      model:          'fallback',
-      breakdown:      { distance_km: dist, speed_kmh: speed },
+    const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
+    res.status(status).json({
+      success: false,
+      message: 'ETA prediction failed',
+      error:   err.response?.data?.detail || err.response?.data?.message || err.message,
     });
   }
 });
@@ -665,20 +661,30 @@ router.post('/ai/eta', async (req, res) => {
 // POST /api/v1/mobile/ai/demand  — proxy for demand prediction
 router.post('/ai/demand', async (req, res) => {
   try {
-    const { data } = await axios.post(`${AI_URL}/predict/demand`, req.body, { timeout: 8000 });
+    const { data } = await axios.post(`${AI_URL}/predict/demand`, req.body, { timeout: 10000 });
     res.json({ success: true, ...data });
   } catch (err) {
-    res.json({ success: true, predicted_count: 50, crowd_level: 'medium', model: 'fallback' });
+    const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
+    res.status(status).json({
+      success: false,
+      message: 'Demand prediction failed',
+      error:   err.response?.data?.detail || err.response?.data?.message || err.message,
+    });
   }
 });
 
 // POST /api/v1/mobile/ai/delay  — proxy for delay prediction
 router.post('/ai/delay', async (req, res) => {
   try {
-    const { data } = await axios.post(`${AI_URL}/predict/delay`, req.body, { timeout: 8000 });
+    const { data } = await axios.post(`${AI_URL}/predict/delay`, req.body, { timeout: 10000 });
     res.json({ success: true, ...data });
   } catch (err) {
-    res.json({ success: true, predicted_delay_minutes: 3, model: 'fallback' });
+    const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
+    res.status(status).json({
+      success: false,
+      message: 'Delay prediction failed',
+      error:   err.response?.data?.detail || err.response?.data?.message || err.message,
+    });
   }
 });
 

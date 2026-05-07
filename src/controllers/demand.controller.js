@@ -72,24 +72,16 @@ exports.predictDemand = async (req, res) => {
       },
     });
   } catch (err) {
-    // Always fall back to rule-based model — covers ECONNREFUSED, ETIMEDOUT, 5xx from AI, misconfigured URL, etc.
-    const hour    = Number(payload?.hour ?? 12);
-    const profile = [2,1,1,1,2,5,9,12,10,7,6,5,6,5,6,7,10,12,9,6,4,3,2,1];
-    const base    = profile[hour] * 12;
-    const pred    = Math.max(5, base + Math.floor(Math.random() * 20 - 10));
-    const level   = pred > 120 ? 'critical' : pred > 80 ? 'high' : pred > 40 ? 'medium' : 'low';
-    return res.status(200).json({
-      success: true,
-      prediction: {
-        predicted_count: pred,
-        crowd_level:     level,
-        confidence:      0.65,
-        model:           'rule_based_fallback',
-        is_best:         false,
-        metrics:         null,
-        peak_factor:     _peakFactor(hour),
-      },
-      warning: 'AI service unavailable — using rule-based fallback',
+    const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
+    const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
+    return res.status(status).json({
+      success: false,
+      message: 'Demand prediction failed',
+      error:   detail,
+      ai_url:  AI_URL,
+      hint:    status === 503
+        ? 'AI service is unreachable. Check AI_SERVICE_URL on backend and that the AI service is running.'
+        : 'AI service returned an error. Check payload and model availability.',
     });
   }
 };
@@ -100,10 +92,14 @@ exports.predictDemandAllModels = async (req, res) => {
     const aiRes = await axios.post(`${AI_URL}/predict/demand/all-models`, req.body, { timeout: 30000 });
     res.status(200).json({ success: true, ...aiRes.data });
   } catch (err) {
-    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-      return res.status(503).json({ success: false, message: 'AI service unavailable' });
-    }
-    res.status(500).json({ success: false, message: err.message });
+    const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
+    const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
+    return res.status(status).json({
+      success: false,
+      message: 'All-models comparison failed',
+      error:   detail,
+      ai_url:  AI_URL,
+    });
   }
 };
 

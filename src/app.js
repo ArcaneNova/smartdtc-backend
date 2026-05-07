@@ -33,22 +33,46 @@ const { Router } = express;
 const axios = require('axios');
 const aiProxy = Router();
 const AI_URL = process.env.AI_SERVICE_URL || process.env.PYTHON_AI_URL || 'http://localhost:8000';
-['demand','delay','eta','fare'].forEach(path => {
+
+const _proxyError = (res, path, err) => {
+  const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
+  const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
+  return res.status(status).json({
+    success: false,
+    message: `AI ${path} prediction failed`,
+    error:   detail,
+    ai_url:  AI_URL,
+  });
+};
+
+const _proxyMap = { demand: '/predict/demand', delay: '/predict/delay', eta: '/predict/eta', fare: '/predict/fare' };
+Object.entries(_proxyMap).forEach(([path, target]) => {
   aiProxy.post(`/${path}`, async (req, res) => {
     try {
-      const { data } = await axios.post(`${AI_URL}/predict/${path}`, req.body, { timeout: 8000 });
+      const { data } = await axios.post(`${AI_URL}${target}`, req.body, { timeout: 15000 });
       res.json({ success: true, ...data });
-    } catch (e) {
-      const fallbacks = { demand: { predicted_count: 50, crowd_level: 'medium' }, delay: { predicted_delay_minutes: 3 }, eta: { eta_minutes: 15, eta_confidence: 0.7, model: 'fallback', breakdown: {} }, fare: { amount: 20, currency: 'INR' } };
-      res.json({ success: true, ...fallbacks[path], model: 'fallback' });
-    }
+    } catch (e) { _proxyError(res, path, e); }
   });
 });
 aiProxy.post('/anomaly', async (req, res) => {
   try {
-    const { data } = await axios.post(`${AI_URL}/detect/anomaly`, req.body, { timeout: 8000 });
+    const { data } = await axios.post(`${AI_URL}/detect/anomaly`, req.body, { timeout: 15000 });
     res.json({ success: true, ...data });
-  } catch (e) { res.json({ success: true, is_anomaly: false, score: 0, confidence: 0.5, reason: 'unavailable', model: 'fallback' }); }
+  } catch (e) { _proxyError(res, 'anomaly', e); }
+});
+// GET /api/v1/ai/models/comparison — full report of all loaded models + metrics
+aiProxy.get('/models/comparison', async (req, res) => {
+  try {
+    const { data } = await axios.get(`${AI_URL}/models/comparison`, { timeout: 15000 });
+    res.json({ success: true, ...data });
+  } catch (e) { _proxyError(res, 'models/comparison', e); }
+});
+// GET /api/v1/ai/health — AI service health passthrough
+aiProxy.get('/health', async (req, res) => {
+  try {
+    const { data } = await axios.get(`${AI_URL}/health`, { timeout: 8000 });
+    res.json({ success: true, ...data });
+  } catch (e) { _proxyError(res, 'health', e); }
 });
 
 const app = express();
