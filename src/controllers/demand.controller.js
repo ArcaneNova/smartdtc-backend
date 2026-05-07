@@ -73,7 +73,10 @@ exports.predictDemand = async (req, res) => {
     });
   } catch (err) {
     const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
-    const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
+    const raw    = err.response?.data?.detail || err.response?.data?.message || err.message;
+    const detail = Array.isArray(raw)
+      ? raw.map(e => `${e.msg ?? e.type ?? JSON.stringify(e)} (${(e.loc ?? []).join('.')})`).join('; ')
+      : (raw ?? 'Unknown AI error');
     return res.status(status).json({
       success: false,
       message: 'Demand prediction failed',
@@ -93,7 +96,10 @@ exports.predictDemandAllModels = async (req, res) => {
     res.status(200).json({ success: true, ...aiRes.data });
   } catch (err) {
     const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
-    const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
+    const raw    = err.response?.data?.detail || err.response?.data?.message || err.message;
+    const detail = Array.isArray(raw)
+      ? raw.map(e => `${e.msg ?? e.type ?? JSON.stringify(e)} (${(e.loc ?? []).join('.')})`).join('; ')
+      : (raw ?? 'Unknown AI error');
     return res.status(status).json({
       success: false,
       message: 'All-models comparison failed',

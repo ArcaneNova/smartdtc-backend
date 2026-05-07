@@ -36,7 +36,11 @@ const AI_URL = process.env.AI_SERVICE_URL || process.env.PYTHON_AI_URL || 'http:
 
 const _proxyError = (res, path, err) => {
   const status = err.response?.status || (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT' ? 503 : 500);
-  const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
+  const raw    = err.response?.data?.detail || err.response?.data?.message || err.message;
+  // Pydantic 422 returns detail as an array of {type,loc,msg,input} — flatten to a readable string
+  const detail = Array.isArray(raw)
+    ? raw.map(e => `${e.msg ?? e.type ?? JSON.stringify(e)} (${(e.loc ?? []).join('.')})`).join('; ')
+    : (raw ?? 'Unknown AI error');
   return res.status(status).json({
     success: false,
     message: `AI ${path} prediction failed`,
