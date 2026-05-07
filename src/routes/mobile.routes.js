@@ -19,14 +19,28 @@ const AI_URL = process.env.AI_SERVICE_URL || process.env.PYTHON_AI_URL || 'http:
 
 router.use(protect);
 
+// ── Helper: find or auto-create a Driver record for the logged-in user ─────
+const getOrCreateDriver = async (userId) => {
+  let driver = await Driver.findOne({ userId });
+  if (!driver) {
+    driver = await Driver.create({
+      userId,
+      licenseNo:  'PENDING-' + userId.toString().slice(-6).toUpperCase(),
+      experience: 0,
+      status:     'off-duty',
+      rating:     4.0,
+    });
+  }
+  return driver;
+};
+
 // ── DRIVER ROUTES ─────────────────────────────────────────────────────────
 
 // GET /api/v1/mobile/driver/dashboard
 router.get('/driver/dashboard', authorize('driver'), async (req, res) => {
   try {
-    const driver = await Driver.findOne({ userId: req.user._id })
-      .populate('assignedBus');
-    if (!driver) return res.status(404).json({ success: false, message: 'Driver profile not found.' });
+    const driver = await getOrCreateDriver(req.user._id);
+    await driver.populate('assignedBus');
 
     const today = new Date(); today.setHours(0,0,0,0);
     const tmrw  = new Date(today.getTime() + 86400000);
@@ -43,7 +57,8 @@ router.get('/driver/dashboard', authorize('driver'), async (req, res) => {
 // GET /api/v1/mobile/driver/profile
 router.get('/driver/profile', authorize('driver'), async (req, res) => {
   try {
-    const driver = await Driver.findOne({ userId: req.user._id }).populate('assignedBus', 'busNumber model');
+    const driver = await getOrCreateDriver(req.user._id);
+    await driver.populate('assignedBus', 'busNumber model');
     res.json({ success: true, driver });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -66,8 +81,7 @@ router.patch('/driver/status', authorize('driver'), async (req, res) => {
 // GET /api/v1/mobile/driver/schedule/today
 router.get('/driver/schedule/today', authorize('driver'), async (req, res) => {
   try {
-    const driver = await Driver.findOne({ userId: req.user._id });
-    if (!driver) return res.status(404).json({ success: false, message: 'Driver not found.' });
+    const driver = await getOrCreateDriver(req.user._id);
 
     const today = new Date(); today.setHours(0,0,0,0);
     const tmrw  = new Date(today.getTime() + 86400000);
@@ -89,8 +103,7 @@ router.get('/driver/schedule/today', authorize('driver'), async (req, res) => {
 // GET /api/v1/mobile/driver/schedule/range?from=YYYY-MM-DD&to=YYYY-MM-DD
 router.get('/driver/schedule/range', authorize('driver'), async (req, res) => {
   try {
-    const driver = await Driver.findOne({ userId: req.user._id });
-    if (!driver) return res.status(404).json({ success: false, message: 'Driver not found.' });
+    const driver = await getOrCreateDriver(req.user._id);
 
     const { from, to } = req.query;
     const fromDate = from ? new Date(from) : new Date();
@@ -115,8 +128,7 @@ router.get('/driver/schedule/range', authorize('driver'), async (req, res) => {
 // GET /api/v1/mobile/driver/schedule/active
 router.get('/driver/schedule/active', authorize('driver'), async (req, res) => {
   try {
-    const driver = await Driver.findOne({ userId: req.user._id });
-    if (!driver) return res.status(404).json({ success: false, message: 'Driver not found.' });
+    const driver = await getOrCreateDriver(req.user._id);
 
     const schedule = await Schedule.findOne({ driver: driver._id, status: 'in-progress' })
       .populate('route', '_id route_name')
@@ -131,18 +143,10 @@ router.get('/driver/schedule/active', authorize('driver'), async (req, res) => {
 // GET /api/v1/mobile/driver/schedule  — all schedules for logged-in driver
 router.get('/driver/schedule', authorize('driver'), async (req, res) => {
   try {
-    console.log('[DRIVER SCHEDULE] Request from user:', req.user._id, 'email:', req.user.email);
-    const driver = await Driver.findOne({ userId: req.user._id });
-    console.log('[DRIVER SCHEDULE] Driver found:', driver ? `${driver._id} (licenseNo: ${driver.licenseNo})` : 'NOT FOUND');
-    if (!driver) {
-      console.log('[DRIVER SCHEDULE] ERROR: No Driver profile for this user');
-      return res.status(404).json({ success: false, message: 'Driver profile not found.' });
-    }
+    const driver = await getOrCreateDriver(req.user._id);
 
     const today = new Date(); today.setHours(0,0,0,0);
     const tmrw  = new Date(today.getTime() + 86400000);
-
-    console.log('[DRIVER SCHEDULE] Query params - driver:', driver._id, 'today:', today, 'tmrw:', tmrw);
 
     const schedules = await Schedule.find({
       driver: driver._id,
@@ -151,11 +155,8 @@ router.get('/driver/schedule', authorize('driver'), async (req, res) => {
       .populate('bus',   'busNumber model type')
       .sort({ departureTime: 1 });
 
-    console.log('[DRIVER SCHEDULE] Found schedules:', schedules.length);
-    schedules.forEach((s, i) => console.log(`  [${i}]`, s._id, 'route:', s.route?.route_name, 'bus:', s.bus?.busNumber, 'time:', s.departureTime));
     res.json({ success: true, schedules });
   } catch (err) {
-    console.error('[DRIVER SCHEDULE ERROR]', err.message, err.stack);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -560,8 +561,7 @@ router.get('/trips/:tripId', async (req, res) => {
 // Called from (driver)/earnings.tsx
 router.get('/driver/performance', authorize('driver'), async (req, res) => {
   try {
-    const driver = await Driver.findOne({ userId: req.user._id });
-    if (!driver) return res.status(404).json({ success: false, message: 'Driver profile not found.' });
+    const driver = await getOrCreateDriver(req.user._id);
 
     const now   = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());

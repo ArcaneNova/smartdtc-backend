@@ -131,34 +131,24 @@ async function seed() {
 
   // ── 3. Drivers ────────────────────────────────────────────────────────────
   console.log('👨‍✈️ Seeding drivers…');
-  const existDriverCount = await Driver.countDocuments();
-  let drivers = [];
-  if (existDriverCount < 20) {
-    const needed = 20 - existDriverCount;
-    const newDriversData = [];
-    for (let i = 0; i < needed && i < driverUsers.length; i++) {
-      const u = driverUsers[existDriverCount + i] || driverUsers[i];
-      const existsForUser = await Driver.findOne({ userId: u._id });
-      if (!existsForUser) {
-        newDriversData.push({
-          userId:     u._id,
-          licenseNo:  `HR-${rand(10,99)}-${rand(100000,999999)}`,
-          experience: rand(2, 20),
-          status:     i < 16 ? 'on-duty' : pick(['off-duty', 'on-leave']),
-          rating:     (rand(35, 50) / 10),
-        });
-      }
+  // Ensure every driver user has a corresponding Driver document
+  let createdCount = 0;
+  for (let i = 0; i < driverUsers.length; i++) {
+    const u = driverUsers[i];
+    const existing = await Driver.findOne({ userId: u._id });
+    if (!existing) {
+      await Driver.create({
+        userId:     u._id,
+        licenseNo:  `HR-${rand(10,99)}-${rand(100000,999999)}`,
+        experience: rand(2, 20),
+        status:     i < 16 ? 'on-duty' : pick(['off-duty', 'on-leave']),
+        rating:     (rand(35, 50) / 10),
+      });
+      createdCount++;
     }
-    if (newDriversData.length) {
-      const created = await Driver.insertMany(newDriversData);
-      drivers = [...(await Driver.find().limit(20 - created.length).lean()), ...created];
-    } else {
-      drivers = await Driver.find().limit(20).lean();
-    }
-  } else {
-    drivers = await Driver.find().limit(20).lean();
   }
-  console.log(`  ${drivers.length} drivers ready`);
+  let drivers = await Driver.find().limit(20).lean();
+  console.log(`  ${drivers.length} drivers ready (${createdCount} newly created)`);
 
   // ── 4. Assign buses to routes + drivers ───────────────────────────────────
   console.log('🔗 Assigning buses to routes and drivers…');
