@@ -154,6 +154,7 @@ exports.generateAISchedule = async (req, res) => {
       min_headway_min:  r.status === 'fulfilled' ? r.value.data.min_headway_min         : null,
       trips_per_bus:    r.status === 'fulfilled' ? r.value.data.trips_per_bus           : null,
       trip_duration_min:r.status === 'fulfilled' ? r.value.data.trip_duration_min       : null,
+      recommendations:  r.status === 'fulfilled' ? r.value.data.recommendations         : null,
       error:            r.status === 'rejected'  ? r.reason.message                     : null,
     }));
 
@@ -166,6 +167,7 @@ exports.generateAISchedule = async (req, res) => {
       min_headway_min:   routeResults[0].min_headway_min,
       trips_per_bus:     routeResults[0].trips_per_bus,
       trip_duration_min: routeResults[0].trip_duration_min,
+      recommendations:   routeResults[0].recommendations,
     } : { slots: [] };
 
     res.json({ success: true, date, schedules: routeResults, ...topLevel });
