@@ -40,7 +40,7 @@ const getOrCreateDriver = async (userId) => {
 router.get('/driver/dashboard', authorize('driver'), async (req, res) => {
   try {
     const driver = await getOrCreateDriver(req.user._id);
-    await driver.populate('assignedBus');
+    await driver.populate('assignedBus', 'busNumber model type capacity status busQrId currentRoute');
 
     const today = new Date(); today.setHours(0,0,0,0);
     const tmrw  = new Date(today.getTime() + 86400000);
