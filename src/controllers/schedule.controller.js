@@ -155,7 +155,7 @@ exports.generateAISchedule = async (req, res) => {
       trips_per_bus:    r.status === 'fulfilled' ? r.value.data.trips_per_bus           : null,
       trip_duration_min:r.status === 'fulfilled' ? r.value.data.trip_duration_min       : null,
       recommendations:  r.status === 'fulfilled' ? r.value.data.recommendations         : null,
-      error:            r.status === 'rejected'  ? r.reason.message                     : null,
+      error:            r.status === 'rejected'  ? (r.reason?.response?.data?.detail ?? r.reason.message) : null,
     }));
 
     // For single-route request: expose top-level fields so frontend can read data.slots etc directly
