@@ -112,7 +112,7 @@ exports.generateAISchedule = async (req, res) => {
     if (!date) return res.status(400).json({ success: false, message: 'date is required.' });
     if (!routeIds.length) return res.status(400).json({ success: false, message: 'routeIds[] is required.' });
 
-    const busesPerRoute = Math.max(1, Math.floor(totalBusesAvailable / routeIds.length));
+    const busesPerRoute = Math.min(200, Math.max(1, Math.floor(totalBusesAvailable / routeIds.length)));
 
     // Fetch route details to compute trip duration if not supplied
     // avg city bus speed ~18 km/h, add stop dwell time buffer
