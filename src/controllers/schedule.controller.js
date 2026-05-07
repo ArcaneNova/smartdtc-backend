@@ -95,7 +95,16 @@ exports.bulkCreateSchedule = async (req, res) => {
 // Calls the GA optimiser on the AI service for one or many routes
 exports.generateAISchedule = async (req, res) => {
   try {
-    const { date, routeIds = [], totalBusesAvailable = 10, is_weekend = false, is_holiday = false } = req.body;
+    const {
+      date,
+      routeIds        = [],
+      totalBusesAvailable = 10,
+      is_weekend      = false,
+      is_holiday      = false,
+      weather         = 'clear',
+      start_hour      = 5,
+      end_hour        = 23,
+    } = req.body;
     if (!date) return res.status(400).json({ success: false, message: 'date is required.' });
     if (!routeIds.length) return res.status(400).json({ success: false, message: 'routeIds[] is required.' });
 
@@ -110,6 +119,8 @@ exports.generateAISchedule = async (req, res) => {
           fleet_size: busesPerRoute,
           is_weekend,
           is_holiday,
+          start_hour,
+          end_hour,
         })
       )
     );
