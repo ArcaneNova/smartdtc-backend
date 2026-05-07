@@ -196,9 +196,8 @@ exports.applyAISchedule = async (req, res) => {
     if (!availableBuses.length) {
       return res.status(400).json({ success: false, message: 'No available buses found for AI schedule application.' });
     }
-    if (!availableDrivers.length) {
-      return res.status(400).json({ success: false, message: 'No available drivers found for AI schedule application.' });
-    }
+    // Drivers are optional for AI schedules — assigned if available, left blank if not
+    const hasDrivers = availableDrivers.length > 0;
 
     const docs = slots.map((slot, index) => {
       // Accept both departure_min (from AI) and departureTime / time (ISO string)
@@ -218,24 +217,48 @@ exports.applyAISchedule = async (req, res) => {
       const arrivalMs = dep.getTime() + (slot.duration_min ?? 90) * 60000;
       const arr = slot.estimatedArrivalTime ? new Date(slot.estimatedArrivalTime) : new Date(arrivalMs);
 
-      return {
+      const doc = {
         route:                routeId,
         date:                 baseDate,
         departureTime:        dep,
         estimatedArrivalTime: arr,
         status:               'scheduled',
         generatedBy:          'ai-auto',
-        crowdLevel:           slot.crowd_level || 'low',
-        demand_score:         slot.demand_score ?? null,
+        crowdLevel:           slot.crowd_level  || slot.crowdLevel  || undefined,
+        demand_score:         slot.demand_score  ?? undefined,
+        direction:            slot.direction     || undefined,
+        bus_number:           slot.bus_number    ?? undefined,
+        trip_number:          slot.trip_number   ?? undefined,
         bus:                  availableBuses[index % availableBuses.length]._id,
-        driver:               availableDrivers[index % availableDrivers.length]._id,
       };
+      if (hasDrivers) {
+        doc.driver = availableDrivers[index % availableDrivers.length]._id;
+      }
+      return doc;
     });
 
-    const created = await Schedule.insertMany(docs, { ordered: false });
-    res.status(201).json({ success: true, count: created.length });
+    // ordered: false — saves all valid docs even if some fail; collect partial results
+    let created = 0;
+    let errors  = 0;
+    try {
+      const result = await Schedule.insertMany(docs, { ordered: false });
+      created = result.length;
+    } catch (bulkErr) {
+      // MongoBulkWriteError — some inserted, some failed
+      created = bulkErr.result?.insertedCount ?? bulkErr.insertedDocs?.length ?? 0;
+      errors  = docs.length - created;
+    }
+
+    res.status(201).json({
+      success: true,
+      count:   created,
+      errors,
+      message: errors > 0
+        ? `Saved ${created}/${docs.length} schedules (${errors} skipped — likely duplicates)`
+        : `All ${created} schedules saved successfully`,
+    });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
