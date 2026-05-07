@@ -72,30 +72,25 @@ exports.predictDemand = async (req, res) => {
       },
     });
   } catch (err) {
-    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') {
-      const hour    = Number(payload?.hour ?? 12);
-      const profile = [2,1,1,1,2,5,9,12,10,7,6,5,6,5,6,7,10,12,9,6,4,3,2,1];
-      const base    = profile[hour] * 12;
-      const pred    = Math.max(5, base + Math.floor(Math.random() * 20 - 10));
-      const level   = pred > 120 ? 'critical' : pred > 80 ? 'high' : pred > 40 ? 'medium' : 'low';
-      return res.status(200).json({
-        success: true,
-        prediction: {
-          predicted_count: pred,
-          crowd_level:     level,
-          confidence:      0.65,
-          model:           'rule_based_fallback',
-          is_best:         false,
-          metrics:         null,
-          peak_factor:     _peakFactor(hour),
-        },
-        warning: 'AI service unavailable — using fallback model',
-      });
-    }
-    if (err.response) {
-      return res.status(502).json({ success: false, message: 'AI service error', detail: err.response.data });
-    }
-    res.status(500).json({ success: false, message: err.message });
+    // Always fall back to rule-based model — covers ECONNREFUSED, ETIMEDOUT, 5xx from AI, misconfigured URL, etc.
+    const hour    = Number(payload?.hour ?? 12);
+    const profile = [2,1,1,1,2,5,9,12,10,7,6,5,6,5,6,7,10,12,9,6,4,3,2,1];
+    const base    = profile[hour] * 12;
+    const pred    = Math.max(5, base + Math.floor(Math.random() * 20 - 10));
+    const level   = pred > 120 ? 'critical' : pred > 80 ? 'high' : pred > 40 ? 'medium' : 'low';
+    return res.status(200).json({
+      success: true,
+      prediction: {
+        predicted_count: pred,
+        crowd_level:     level,
+        confidence:      0.65,
+        model:           'rule_based_fallback',
+        is_best:         false,
+        metrics:         null,
+        peak_factor:     _peakFactor(hour),
+      },
+      warning: 'AI service unavailable — using rule-based fallback',
+    });
   }
 };
 
