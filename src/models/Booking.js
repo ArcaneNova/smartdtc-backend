@@ -20,8 +20,14 @@ const bookingSchema = new mongoose.Schema({
   expiresAt:      { type: Date },                  // 90-min scan-to-board validity
 }, { timestamps: true });
 
+bookingSchema.pre('save', function(next) {
+  if (!this.bookingRef) {
+    this.bookingRef = `DTC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  }
+  next();
+});
+
 bookingSchema.index({ user: 1, createdAt: -1 });
 bookingSchema.index({ schedule: 1, status: 1 });
-// Note: bookingRef unique index is defined via schema field above — no duplicate index needed
 
 module.exports = mongoose.model('Booking', bookingSchema);
