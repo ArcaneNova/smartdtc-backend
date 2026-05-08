@@ -217,15 +217,15 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
     const booking = await Booking.create({
       user:        req.user._id,
       bus:         bus._id,
-      schedule:    scheduleId || undefined,
+      schedule:    (scheduleId && scheduleId !== 'undefined') ? scheduleId : null,
       toStop:      dropStageName,
       dropStop:    dropStageName,
       fare:        fare * passengers,
       seatNumbers: seats,
       passengers:  passengers,
       status:      'confirmed',
-      paymentMode: paymentMode,
-      paymentId:   paymentId,
+      paymentMode: paymentMode || 'cash',
+      paymentId:   paymentId || null,
       bookedAt:    new Date(),
       expiresAt:   new Date(Date.now() + 90 * 60 * 1000),
     });
@@ -246,7 +246,12 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('[BOOKING ERROR]', err);
+    res.status(500).json({ 
+      success: false, 
+      message: err.message,
+      errors: err.errors // Include Mongoose validation errors if any
+    });
   }
 });
 

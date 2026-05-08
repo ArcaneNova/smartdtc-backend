@@ -22,7 +22,9 @@ const bookingSchema = new mongoose.Schema({
 
 bookingSchema.pre('save', function(next) {
   if (!this.bookingRef) {
-    this.bookingRef = `DTC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const ts = Date.now().toString(36).toUpperCase();
+    const rand = Math.random().toString(36).substring(2, 5).toUpperCase();
+    this.bookingRef = `DTC-${ts}-${rand}`;
   }
   next();
 });
