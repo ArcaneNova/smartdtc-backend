@@ -196,15 +196,19 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
     const bus = await Bus.findOne({ busQrId });
     if (!bus) return res.status(404).json({ success: false, message: 'Bus not found.' });
 
+    // Fetch the route from the bus if not provided
+    const routeId = bus.currentRoute;
+
     // Auto seat assignment
     const seatLayout = ['W', 'A', 'A', 'W'];
     let bookedSeats = [];
-    if (scheduleId) {
+    if (scheduleId && scheduleId !== 'undefined') {
       const existing = await Booking.find({ schedule: scheduleId, status: { $in: ['confirmed', 'boarded'] } });
       bookedSeats = existing.flatMap(b => b.seatNumbers || []);
     }
     const seats = [];
-    outer: for (let row = 1; row <= Math.ceil(bus.capacity / 4); row++) {
+    const capacity = bus.capacity || 60;
+    outer: for (let row = 1; row <= Math.ceil(capacity / 4); row++) {
       for (let col = 0; col < 4; col++) {
         const label = `${row}${seatLayout[col]}`;
         if (!bookedSeats.includes(label)) {
@@ -214,21 +218,24 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
       }
     }
 
-    const booking = await Booking.create({
+    const bookingData = {
       user:        req.user._id,
       bus:         bus._id,
+      route:       routeId || undefined,
       schedule:    (scheduleId && scheduleId !== 'undefined') ? scheduleId : null,
       toStop:      dropStageName,
       dropStop:    dropStageName,
-      fare:        fare * passengers,
+      fare:        Number(fare) * Number(passengers),
       seatNumbers: seats,
-      passengers:  passengers,
+      passengers:  Number(passengers),
       status:      'confirmed',
       paymentMode: paymentMode || 'cash',
       paymentId:   paymentId || null,
       bookedAt:    new Date(),
       expiresAt:   new Date(Date.now() + 90 * 60 * 1000),
-    });
+    };
+
+    const booking = await Booking.create(bookingData);
 
     res.json({
       success: true,
