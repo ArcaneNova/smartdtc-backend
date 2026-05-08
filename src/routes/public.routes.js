@@ -196,14 +196,18 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
     const bus = await Bus.findOne({ busQrId });
     if (!bus) return res.status(404).json({ success: false, message: 'Bus not found.' });
 
+    // Validate ObjectId safety
+    const isValidId = (id) => id && /^[0-9a-fA-F]{24}$/.test(id.toString());
+
     // Fetch the route from the bus if not provided
-    const routeId = bus.currentRoute;
+    const routeId = isValidId(bus.currentRoute) ? bus.currentRoute : null;
+    const safeScheduleId = isValidId(scheduleId) ? scheduleId : null;
 
     // Auto seat assignment
     const seatLayout = ['W', 'A', 'A', 'W'];
     let bookedSeats = [];
-    if (scheduleId && scheduleId !== 'undefined') {
-      const existing = await Booking.find({ schedule: scheduleId, status: { $in: ['confirmed', 'boarded'] } });
+    if (safeScheduleId) {
+      const existing = await Booking.find({ schedule: safeScheduleId, status: { $in: ['confirmed', 'boarded'] } });
       bookedSeats = existing.flatMap(b => b.seatNumbers || []);
     }
     const seats = [];
@@ -222,7 +226,7 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
       user:        req.user._id,
       bus:         bus._id,
       route:       routeId || undefined,
-      schedule:    (scheduleId && scheduleId !== 'undefined') ? scheduleId : null,
+      schedule:    safeScheduleId || undefined,
       toStop:      dropStageName,
       dropStop:    dropStageName,
       fare:        Number(fare) * Number(passengers),
@@ -253,11 +257,12 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[BOOKING ERROR]', err);
+    console.error('[BOOKING 500 CRASH]', err);
     res.status(500).json({ 
       success: false, 
       message: err.message,
-      errors: err.errors // Include Mongoose validation errors if any
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+      errors: err.errors
     });
   }
 });
