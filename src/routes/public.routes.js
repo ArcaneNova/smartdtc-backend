@@ -224,7 +224,8 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
       seatNumbers: seats,
       passengers:  passengers,
       status:      'confirmed',
-      paymentMode: 'cash',
+      paymentMode: paymentMode,
+      paymentId:   paymentId,
       bookedAt:    new Date(),
       expiresAt:   new Date(Date.now() + 90 * 60 * 1000),
     });
