@@ -189,7 +189,7 @@ router.get('/alerts', async (req, res) => {
 // Used by mobile app for on-board cash/demo payments
 router.post('/scan-book/mobile-book', protect, async (req, res) => {
   try {
-    const { busQrId, scheduleId, dropStageId, dropStageName, fare, passengers = 1 } = req.body;
+    const { busQrId, scheduleId, dropStageId, dropStageName, fare, passengers = 1, paymentMode = 'cash', paymentId = null } = req.body;
     if (!busQrId || !dropStageName || !fare)
       return res.status(400).json({ success: false, message: 'busQrId, dropStageName, and fare are required.' });
 
@@ -239,6 +239,7 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
         toStop:      booking.toStop,
         fare:        booking.fare,
         status:      booking.status,
+        paymentMode: booking.paymentMode,
         expiresAt:   booking.expiresAt,
         busNumber:   bus.busNumber,
         busType:     bus.type,
