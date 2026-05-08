@@ -222,24 +222,31 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
       }
     }
 
-    const bookingData = {
+    // Manual bookingRef to be absolutely sure
+    const ts = Date.now().toString(36).toUpperCase();
+    const rand = Math.random().toString(36).substring(2, 5).toUpperCase();
+    const manualRef = `DTC-MOB-${ts}-${rand}`;
+
+    const booking = new Booking({
       user:        req.user._id,
       bus:         bus._id,
       route:       routeId || undefined,
       schedule:    safeScheduleId || undefined,
+      bookingRef:  manualRef,
       toStop:      dropStageName,
       dropStop:    dropStageName,
-      fare:        Number(fare) * Number(passengers),
+      fare:        Number(fare) || 0,
       seatNumbers: seats,
-      passengers:  Number(passengers),
+      passengers:  Number(passengers) || 1,
       status:      'confirmed',
       paymentMode: paymentMode || 'cash',
       paymentId:   paymentId || null,
       bookedAt:    new Date(),
       expiresAt:   new Date(Date.now() + 90 * 60 * 1000),
-    };
+    });
 
-    const booking = await Booking.create(bookingData);
+    console.log('[BOOKING ATTEMPT]', manualRef);
+    await booking.save();
 
     res.json({
       success: true,
@@ -258,11 +265,13 @@ router.post('/scan-book/mobile-book', protect, async (req, res) => {
     });
   } catch (err) {
     console.error('[BOOKING 500 CRASH]', err);
+    // Return EVERYTHING to the user so we can see the real error
     res.status(500).json({ 
       success: false, 
       message: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-      errors: err.errors
+      fullError: JSON.stringify(err, Object.getOwnPropertyNames(err)),
+      mongoError: err.name,
+      code: err.code
     });
   }
 });
